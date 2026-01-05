@@ -1,63 +1,30 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Peluquería Powell – Reservas</title>
-
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
+<meta charset="UTF-8">
+<title>Peluquería Powell</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body { font-family: Arial, sans-serif; background:#f4f4f4; padding:10px; }
-h1,h2 { text-align:center; }
-.card { background:white; padding:15px; border-radius:8px; margin-bottom:12px; }
-button { padding:10px; width:100%; margin-top:8px; background:#111; color:#fff; border:none; border-radius:6px; }
-input, select { width:100%; padding:8px; margin-top:6px; }
-.slot { padding:6px; margin:4px 0; color:#fff; border-radius:4px; text-align:center; }
-.libre { background:green; }
-.ocupado { background:red; }
-.cerrado { background:orange; }
-.hidden { display:none; }
+body{font-family:Arial;margin:20px}
+select,input,button{width:100%;padding:10px;margin:8px 0}
+button{background:#000;color:#fff;border:none}
 </style>
 </head>
 <body>
 
-<h1>Peluquería Powell</h1>
-
-<div class="card">
-<button onclick="showClient()">Cliente</button>
-<button onclick="showAdmin()">Administrador</button>
-</div>
-
-<!-- CLIENTE -->
-<div id="client" class="card">
 <h2>Reservar cita</h2>
-<input id="c_name" placeholder="Nombre" />
-<input id="c_phone" placeholder="Teléfono" />
-<select id="c_service"></select>
-<input type="date" id="c_date" />
-<button onclick="findSlot()">Buscar primera hora disponible</button>
-<div id="result"></div>
-</div>
 
-<!-- ADMIN -->
-<div id="admin" class="card hidden">
-<h2>Panel Powell</h2>
-<input type="password" id="adminPass" placeholder="Contraseña" />
-<button onclick="login()">Entrar</button>
-<div id="adminContent" class="hidden"></div>
-</div>
+<select id="service"></select>
+<input type="date" id="date">
+<select id="time"></select>
+<button onclick="reserve()">Reservar</button>
 
-<script>
-/**********************
- // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+<p id="msg"></p>
 
-// Your web app's Firebase configuration
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getFirestore, collection, getDocs, addDoc, query, where } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
 const firebaseConfig = {
   apiKey: "AIzaSyA5CHMM2R2nIvYGgIi4RZVlE3zkjmJVew8",
   authDomain: "powell-barbershop.firebaseapp.com",
@@ -67,22 +34,80 @@ const firebaseConfig = {
   appId: "1:508302099014:web:8e773d69c8dc806442c047"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-**********************/
-const firebaseConfig = {
-  // const firebaseConfig = {
-  apiKey: "AIzaSyA5CHMM2R2nIvYGgIi4RZVlE3zkjmJVew8",
-  authDomain: "powell-barbershop.firebaseapp.com",
-  projectId: "powell-barbershop",
-  storageBucket: "powell-barbershop.firebasestorage.app",
-  messagingSenderId: "508302099014",
-  appId: "1:508302099014:web:8e773d69c8dc806442c047"
-};
+const db = getFirestore(app);
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const serviceSelect = document.getElementById("service");
+const timeSelect = document.getElementById("time");
+const dateInput = document.getElementById("date");
+const msg = document.getElementById("msg");
 
-const ADMIN_PASSWORD = 'powell';
+let services = {};
 
-function showClient(){ client.classList.remove('hidden'); admin.classList.add('hidden'); }
+async function loadServices(){
+  const snap = await getDocs(collection(db,"config"));
+  snap.forEach(d=>{
+    if(d.id==="services") services=d.data();
+  });
+  for(const s in services){
+    const o=document.createElement("option");
+    o.value=s;
+    o.textContent=`${s} - ${services[s].price}€`;
+    serviceSelect.appendChild(o);
+  }
+}
+
+function loadTimes(){
+  timeSelect.innerHTML="";
+  for(let h=10;h<21;h++){
+    for(let m of [0,30]){
+      const t=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+      const o=document.createElement("option");
+      o.value=t;
+      o.textContent=t;
+      timeSelect.appendChild(o);
+    }
+  }
+}
+
+function min(t){
+  const [h,m]=t.split(":").map(Number);
+  return h*60+m;
+}
+
+async function reserve(){
+  const service=serviceSelect.value;
+  const date=dateInput.value;
+  const time=timeSelect.value;
+  if(!date){msg.textContent="Elige una fecha";return;}
+
+  const q=query(collection(db,"appointments"),where("date","==",date));
+  const snap=await getDocs(q);
+
+  const duration=services[service].duration;
+  const start=min(time);
+  const end=start+duration;
+
+  for(const d of snap.docs){
+    const a=d.data();
+    const s=min(a.time);
+    const e=s+a.duration;
+    if(start<e && end>s){
+      msg.textContent="Horario ocupado";
+      return;
+    }
+  }
+
+  await addDoc(collection(db,"appointments"),{
+    service,date,time,duration,price:services[service].price
+  });
+
+  msg.textContent="Cita reservada correctamente";
+}
+
+loadServices();
+loadTimes();
+</script>
+
+</body>
+</html>
