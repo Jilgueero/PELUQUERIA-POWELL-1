@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peluquería Powell – Reservas</title>
+<style>
+body { font-family: Arial, sans-serif; background:#f4f4f4; padding:10px; }
+h1, h2 { text-align:center; }
+.card { background:white; padding:15px; border-radius:8px; margin-bottom:12px; }
+label { display:block; margin-top:8px; }
+input, select, button { width:100%; padding:8px; margin-top:4px; }
+button { background:#111; color:white; border:none; border-radius:6px; margin-top:12px; }
+.slot { padding:6px; margin:4px 0; border-radius:5px; color:white; text-align:center; }
+.libre { background:green; }
+ocupado { background:red; }
+cerrado { background:orange; }
+</style>
+</head>
+<body>
+
+<h1>Peluquería Powell</h1>
+
+<div class="card">
+<h2>Reservar cita</h2>
+<label>Nombre</label>
+<input id="name">
+<label>Teléfono</label>
+<input id="phone">
+<label>Fecha</label>
+<input type="date" id="date" onchange="renderSlots()">
+<label>Servicio</label>
+<select id="service" onchange="renderSlots()">
+<option value="30|13">Corte de pelo – 13€ (30min)</option>
+<option value="45|15">Corte + barba – 15€ (45min)</option>
+<option value="60|20">Corte + barba + cejas – 20€ (60min)</option>
+</select>
+<div id="slots"></div>
+</div>
+
+<script>
+const appointments = JSON.parse(localStorage.getItem('appointments')) || [];
+
+const schedule = [
+  { start: '10:00', end: '13:30' },
+  { start: '16:30', end: '21:00' }
+];
+
+function timeToMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function renderSlots() {
+  const date = document.getElementById('date').value;
+  if (!date) return;
+
+  const duration = parseInt(document.getElementById('service').value.split('|')[0]);
+  const container = document.getElementById('slots');
+  container.innerHTML = '<h3>Disponibilidad</h3>';
+
+  schedule.forEach(block => {
+    let start = timeToMinutes(block.start);
+    const end = timeToMinutes(block.end);
+
+    while (start + duration <= end) {
+      const hour = String(Math.floor(start / 60)).padStart(2,'0');
+      const min = String(start % 60).padStart(2,'0');
+      const time = `${hour}:${min}`;
+
+      const conflict = appointments.some(a => {
+        if (a.date !== date) return false;
+        const aStart = timeToMinutes(a.time);
+        const aEnd = aStart + a.duration;
+        return start < aEnd && (start + duration) > aStart;
+      });
+
+      const div = document.createElement('div');
+      div.className = 'slot ' + (conflict ? 'ocupado' : 'libre');
+      div.textContent = conflict ? `${time} – OCUPADO` : `${time} – LIBRE`;
+
+      if (!conflict) {
+        div.onclick = () => book(time, duration);
+      }
+
+      container.appendChild(div);
+      start += 15;
+    }
+  });
+}
+
+function book(time, duration) {
+  const name = document.getElementById('name').value;
+  const phone = document.getElementById('phone').value;
+  const date = document.getElementById('date').value;
+  const [dur, price] = document.getElementById('service').value.split('|');
+
+  if (!name || !phone) {
+    alert('Completa nombre y teléfono');
+    return;
+  }
+
+  appointments.push({
+    name,
+    phone,
+    date,
+    time,
+    duration: parseInt(dur),
+    price,
+    status: 'Reservada'
+  });
+
+  localStorage.setItem('appointments', JSON.stringify(appointments));
+  alert('Cita reservada correctamente');
+  renderSlots();
+}
+</script>
+
+</body>
+</html>
