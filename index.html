@@ -1,21 +1,25 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Peluquería Powell</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Peluquería Powell – Reservas</title>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
 <style>
 body { font-family: Arial, sans-serif; background:#f4f4f4; padding:10px; }
-h1, h2 { text-align:center; }
+h1,h2 { text-align:center; }
 .card { background:white; padding:15px; border-radius:8px; margin-bottom:12px; }
-label { display:block; margin-top:8px; }
-input, select, button { width:100%; padding:8px; margin-top:4px; }
-button { background:#111; color:white; border:none; border-radius:6px; margin-top:10px; }
-.slot { padding:6px; margin:4px 0; border-radius:5px; color:white; text-align:center; }
+button { padding:10px; width:100%; margin-top:8px; background:#111; color:#fff; border:none; border-radius:6px; }
+input, select { width:100%; padding:8px; margin-top:6px; }
+.slot { padding:6px; margin:4px 0; color:#fff; border-radius:4px; text-align:center; }
 .libre { background:green; }
 .ocupado { background:red; }
+.cerrado { background:orange; }
 .hidden { display:none; }
-.admin { border-left:4px solid #000; }
 </style>
 </head>
 <body>
@@ -30,92 +34,55 @@ button { background:#111; color:white; border:none; border-radius:6px; margin-to
 <!-- CLIENTE -->
 <div id="client" class="card">
 <h2>Reservar cita</h2>
-<label>Nombre</label>
-<input id="c_name">
-<label>Teléfono</label>
-<input id="c_phone">
-<label>Fecha</label>
-<input type="date" id="c_date" onchange="renderSlots()">
-<label>Servicio</label>
-<select id="c_service" onchange="renderSlots()">
-<option value="30|13|Corte de pelo">Corte de pelo – 13€</option>
-<option value="45|15|Corte + barba">Corte + barba – 15€</option>
-<option value="60|20|Corte + barba + cejas">Corte + barba + cejas – 20€</option>
-</select>
-<div id="slots"></div>
+<input id="c_name" placeholder="Nombre" />
+<input id="c_phone" placeholder="Teléfono" />
+<select id="c_service"></select>
+<input type="date" id="c_date" />
+<button onclick="findSlot()">Buscar primera hora disponible</button>
+<div id="result"></div>
 </div>
 
 <!-- ADMIN -->
-<div id="admin" class="card admin hidden">
+<div id="admin" class="card hidden">
 <h2>Panel Powell</h2>
-<label>Contraseña</label>
-<input type="password" id="adminPass">
+<input type="password" id="adminPass" placeholder="Contraseña" />
 <button onclick="login()">Entrar</button>
 <div id="adminContent" class="hidden"></div>
 </div>
 
 <script>
+/**********************
+ // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyA5CHMM2R2nIvYGgIi4RZVlE3zkjmJVew8",
+  authDomain: "powell-barbershop.firebaseapp.com",
+  projectId: "powell-barbershop",
+  storageBucket: "powell-barbershop.firebasestorage.app",
+  messagingSenderId: "508302099014",
+  appId: "1:508302099014:web:8e773d69c8dc806442c047"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+**********************/
+const firebaseConfig = {
+  // const firebaseConfig = {
+  apiKey: "AIzaSyA5CHMM2R2nIvYGgIi4RZVlE3zkjmJVew8",
+  authDomain: "powell-barbershop.firebaseapp.com",
+  projectId: "powell-barbershop",
+  storageBucket: "powell-barbershop.firebasestorage.app",
+  messagingSenderId: "508302099014",
+  appId: "1:508302099014:web:8e773d69c8dc806442c047"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
 const ADMIN_PASSWORD = 'powell';
-let appointments = JSON.parse(localStorage.getItem('appointments')) || [];
 
-const schedule = [
-  { start: '10:00', end: '13:30' },
-  { start: '16:30', end: '21:00' }
-];
-
-function showClient(){ document.getElementById('client').classList.remove('hidden'); document.getElementById('admin').classList.add('hidden'); }
-function showAdmin(){ document.getElementById('admin').classList.remove('hidden'); document.getElementById('client').classList.add('hidden'); }
-
-function timeToMin(t){ const [h,m]=t.split(':'); return h*60+ +m; }
-
-function renderSlots(){
-  const date=document.getElementById('c_date').value;
-  if(!date) return;
-  const duration=+document.getElementById('c_service').value.split('|')[0];
-  const cont=document.getElementById('slots'); cont.innerHTML='';
-  schedule.forEach(b=>{
-    let s=timeToMin(b.start), e=timeToMin(b.end);
-    while(s+duration<=e){
-      const h=String(Math.floor(s/60)).padStart(2,'0');
-      const m=String(s%60).padStart(2,'0');
-      const t=`${h}:${m}`;
-      const busy=appointments.some(a=>a.date===date && s < timeToMin(a.time)+a.duration && s+duration > timeToMin(a.time));
-      const d=document.createElement('div');
-      d.className='slot '+(busy?'ocupado':'libre');
-      d.textContent=busy?`${t} OCUPADO`:`${t} LIBRE`;
-      if(!busy) d.onclick=()=>book(t,duration);
-      cont.appendChild(d);
-      s+=15;
-    }
-  });
-}
-
-function book(time,duration){
-  const name=c_name.value, phone=c_phone.value, date=c_date.value;
-  const [dur,price,service]=c_service.value.split('|');
-  if(!name||!phone){alert('Completa datos');return;}
-  appointments.push({name,phone,date,time,duration:+dur,price:+price,service,status:'Reservada'});
-  localStorage.setItem('appointments',JSON.stringify(appointments));
-  alert('Cita reservada'); renderSlots();
-}
-
-function login(){ if(adminPass.value!==ADMIN_PASSWORD){alert('Incorrecta');return;} renderAdmin(); document.getElementById('adminContent').classList.remove('hidden'); }
-
-function renderAdmin(){
-  const div=document.getElementById('adminContent'); div.innerHTML='<h3>Citas</h3>';
-  appointments.forEach((a,i)=>{
-    const d=document.createElement('div');
-    d.innerHTML=`${a.date} ${a.time} - ${a.name} (${a.service}) ${a.price}€
-    <select onchange="updateStatus(${i},this.value)">
-    <option ${a.status==='Reservada'?'selected':''}>Reservada</option>
-    <option ${a.status==='Vino'?'selected':''}>Vino</option>
-    <option ${a.status==='No vino'?'selected':''}>No vino</option>
-    </select>`;
-    div.appendChild(d);
-  });
-}
-
-function updateStatus(i,val){ appointments[i].status=val; localStorage.setItem('appointments',JSON.stringify(appointments)); }
-</script>
-</body>
-</html>
+function showClient(){ client.classList.remove('hidden'); admin.classList.add('hidden'); }
