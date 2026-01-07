@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <title>Peluquería Powell</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{font-family:Arial;margin:20px}
+body{font-family:Arial;padding:20px}
 select,input,button{width:100%;padding:10px;margin:8px 0}
-button{background:#000;color:#fff;border:none}
+button{background:black;color:white;border:none}
 </style>
 </head>
 <body>
@@ -18,12 +18,11 @@ button{background:#000;color:#fff;border:none}
 <input type="date" id="date">
 <select id="time"></select>
 <button onclick="reserve()">Reservar</button>
-
 <p id="msg"></p>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getFirestore, collection, getDocs, addDoc, query, where } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA5CHMM2R2nIvYGgIi4RZVlE3zkjmJVew8",
@@ -37,72 +36,49 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const serviceSelect = document.getElementById("service");
-const timeSelect = document.getElementById("time");
-const dateInput = document.getElementById("date");
+const serviceSel = document.getElementById("service");
+const timeSel = document.getElementById("time");
+const dateInp = document.getElementById("date");
 const msg = document.getElementById("msg");
 
 let services = {};
 
+function toMin(t){const[a,b]=t.split(":");return (+a)*60+(+b);}
+
 async function loadServices(){
-  const snap = await getDocs(collection(db,"config"));
+  const snap = await getDocs(collection(db,"services"));
   snap.forEach(d=>{
-    if(d.id==="services") services=d.data();
-  });
-  for(const s in services){
+    services[d.id]=d.data();
     const o=document.createElement("option");
-    o.value=s;
-    o.textContent=`${s} - ${services[s].price}€`;
-    serviceSelect.appendChild(o);
-  }
+    o.value=d.id;
+    o.textContent=d.id.replaceAll("_"," ")+" - "+d.data().price+"€";
+    serviceSel.appendChild(o);
+  });
 }
 
 function loadTimes(){
-  timeSelect.innerHTML="";
+  timeSel.innerHTML="";
   for(let h=10;h<21;h++){
     for(let m of [0,30]){
       const t=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
       const o=document.createElement("option");
-      o.value=t;
-      o.textContent=t;
-      timeSelect.appendChild(o);
+      o.value=t;o.textContent=t;
+      timeSel.appendChild(o);
     }
   }
-}
-
-function min(t){
-  const [h,m]=t.split(":").map(Number);
-  return h*60+m;
 }
 
 async function reserve(){
-  const service=serviceSelect.value;
-  const date=dateInput.value;
-  const time=timeSelect.value;
-  if(!date){msg.textContent="Elige una fecha";return;}
-
-  const q=query(collection(db,"appointments"),where("date","==",date));
-  const snap=await getDocs(q);
-
-  const duration=services[service].duration;
-  const start=min(time);
-  const end=start+duration;
-
-  for(const d of snap.docs){
-    const a=d.data();
-    const s=min(a.time);
-    const e=s+a.duration;
-    if(start<e && end>s){
-      msg.textContent="Horario ocupado";
-      return;
-    }
-  }
-
+  if(!dateInp.value){msg.textContent="Elige fecha";return;}
   await addDoc(collection(db,"appointments"),{
-    service,date,time,duration,price:services[service].price
+    service:serviceSel.value,
+    date:dateInp.value,
+    time:timeSel.value,
+    duration:services[serviceSel.value].duration,
+    price:services[serviceSel.value].price,
+    created:new Date()
   });
-
-  msg.textContent="Cita reservada correctamente";
+  msg.textContent="Cita reservada 👍";
 }
 
 loadServices();
