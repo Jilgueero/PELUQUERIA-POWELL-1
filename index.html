@@ -17,7 +17,7 @@ button{background:black;color:white;border:none}
 <select id="service"></select>
 <input type="date" id="date">
 <select id="time"></select>
-<button onclick="reserve()">Reservar</button>
+<button id="btn">Reservar</button>
 <p id="msg"></p>
 
 <script type="module">
@@ -40,13 +40,12 @@ const serviceSel = document.getElementById("service");
 const timeSel = document.getElementById("time");
 const dateInp = document.getElementById("date");
 const msg = document.getElementById("msg");
+const btn = document.getElementById("btn");
 
 let services = {};
 
-function toMin(t){const[a,b]=t.split(":");return (+a)*60+(+b);}
-
 async function loadServices(){
-  const snap = await getDocs(collection(db,"services"));
+  const snap = await getDocs(collection(db,"config","services"));
   snap.forEach(d=>{
     services[d.id]=d.data();
     const o=document.createElement("option");
@@ -58,32 +57,26 @@ async function loadServices(){
 
 function loadTimes(){
   timeSel.innerHTML="";
-  for(let h=10;h<21;h++){
-    for(let m of [0,30]){
-      const t=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-      const o=document.createElement("option");
-      o.value=t;o.textContent=t;
-      timeSel.appendChild(o);
-    }
-  }
-}
-
-async function reserve(){
-  if(!dateInp.value){msg.textContent="Elige fecha";return;}
-  await addDoc(collection(db,"appointments"),{
-    service:serviceSel.value,
-    date:dateInp.value,
-    time:timeSel.value,
-    duration:services[serviceSel.value].duration,
-    price:services[serviceSel.value].price,
-    created:new Date()
+  const slots=["10:00","10:30","11:00","11:30","12:00","12:30","13:00",
+               "16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30"];
+  slots.forEach(t=>{
+    const o=document.createElement("option");
+    o.value=t;
+    o.textContent=t;
+    timeSel.appendChild(o);
   });
-  msg.textContent="Cita reservada 👍";
 }
 
-loadServices();
-loadTimes();
-</script>
+btn.onclick = async () => {
+  if(!dateInp.value){
+    msg.textContent="Elige fecha";
+    return;
+  }
 
-</body>
-</html>
+  const service = services[serviceSel.value];
+  if(!service){
+    msg.textContent="Servicio no válido";
+    return;
+  }
+
+  await addDoc(collection(db,"appointments"),
